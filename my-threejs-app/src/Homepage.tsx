@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   Theme,
   Container,
@@ -42,23 +42,25 @@ const EXOPLANETS: Exoplanet[] = [
 ];
 
 interface ConstellationCardProps {
-  index: number;
+  constellation: Constellation;
 }
 
-const ConstellationCard: React.FC<ConstellationCardProps> = ({ index }) => {
+const ConstellationCard: React.FC<ConstellationCardProps> = ({
+  constellation,
+}) => {
   return (
     <Card>
       <Flex direction="column" gap="3">
         <img
-          src={`https://place-hold.it/300x200?text=Constellation ${index}`}
-          alt={`Constellation ${index}`}
+          src={constellation.image_data}
+          alt={`Constellation ${constellation.id}`}
           style={{ width: "100%", height: 200, objectFit: "cover" }}
         />
         <Text as="p" size="3" weight="bold">
-          Constellation Name {index}
+          Constellation Name {constellation.id} by {constellation.user_name}
         </Text>
         <Text as="p" size="2">
-          A brief description of this amazing new constellation.
+          {constellation.description}
         </Text>
       </Flex>
     </Card>
@@ -136,11 +138,7 @@ export const Homepage: React.FC = () => {
             <Heading size="8" mb="6">
               New Constellations
             </Heading>
-            <Grid columns="3" gap="4" width="100%">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <ConstellationCard key={i} index={i} />
-              ))}
-            </Grid>
+            <Constellations />
           </Flex>
         </Container>
 
@@ -168,4 +166,36 @@ export const Homepage: React.FC = () => {
   );
 };
 
+export interface Constellation {
+  id: number;
+  name: string;
+  description: string;
+  user_name: string;
+  image_data: string;
+}
+
+function Constellations() {
+  const [constellations, setConstellations] = React.useState<
+    Constellation[] | null
+  >(null);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:5000/get-constellations")
+      .then((response) => response.json())
+      .then((data: Constellation[]) => setConstellations(data));
+  }, []);
+
+  if (!constellations) return <div>Loading...</div>;
+
+  return (
+    <Grid columns="3" gap="4">
+      {constellations.map((constellation) => (
+        <ConstellationCard
+          key={constellation.id}
+          constellation={constellation}
+        />
+      ))}
+    </Grid>
+  );
+}
 export default Homepage;
