@@ -1,0 +1,4 @@
+*.fits
+*.png
+venv
+node_modules/*
