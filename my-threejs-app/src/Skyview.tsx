@@ -1,6 +1,7 @@
 // src/App.tsx
 import "@radix-ui/themes/styles.css";
 
+
 import React, { useEffect, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Line } from "@react-three/drei";
@@ -9,6 +10,8 @@ import * as THREE from "three";
 import { Button, Dialog, Flex, TextArea, TextField } from "@radix-ui/themes";
 import { Theme } from "@radix-ui/themes";
 import { HUD } from "./HUD";
+import { getColor } from './helpers';  // Import the getColor function
+
 
 // Define the type for a star object
 export interface StarData {
@@ -16,6 +19,9 @@ export interface StarData {
   dec: number;
   distance: number;
   brightness: number;
+  bp_rp :number;
+  g_rp : number;
+  bp_g : number;
 }
 
 // Define props for the Star component
@@ -33,8 +39,9 @@ const Star: React.FC<StarProps> = ({
   starInfo,
   onSelect,
 }) => {
-  const [size, setSize] = useState(0.1 * Math.max(0.1, brightness / 10)); // Adjust the divisor to control size scaling
+  const [size, setSize] = useState(0.3 * Math.max(0.1, brightness / 10)); // Adjust the divisor to control size scaling
   const clickDetectionSize = size * 25; // Size for the invisible sphere for click detection
+  const color = getColor(starInfo.bp_rp, starInfo.g_rp, starInfo.bp_g)
 
   // Handle star selection on click
   const handleClick = () => {
@@ -57,7 +64,7 @@ const Star: React.FC<StarProps> = ({
       {/* Visible star sphere */}
       <mesh position={position}>
         <sphereGeometry args={[size, 8, 8]} />
-        <meshBasicMaterial color="white" />
+        <meshBasicMaterial color={color} />
       </mesh>
     </>
   );
@@ -75,16 +82,17 @@ const Star: React.FC<StarProps> = ({
 7,Dubhe,"4,6",165.931965,61.751035, 26.54
  */
 
-const SELECTED_STARS_BIG_DIPPER: StarData[] = [
-  { ra: 206.8843267, dec: 49.31320181, distance: 1882.8, brightness: 31.38 },
-  { ra: 200.9823734, dec: 54.92525908, distance: 2361.6, brightness: 39.36 },
-  { ra: 193.5081785, dec: 55.95978478, distance: 2370.6, brightness: 39.51 },
-  { ra: 183.8573483, dec: 57.03265316, distance: 2430.6, brightness: 40.51 },
-  { ra: 178.4583668, dec: 53.69479733, distance: 2352.6, brightness: 39.21 },
-  { ra: 165.4609742, dec: 56.38257749, distance: 2454.0, brightness: 40.9 },
-  { ra: 165.931965, dec: 61.751035, distance: 1592.4, brightness: 26.54 },
-  { ra: 183.8573483, dec: 57.03265316, distance: 2430.6, brightness: 40.51 },
-];
+
+// const SELECTED_STARS_BIG_DIPPER: StarData[] = [
+//   { ra: 206.8843267, dec: 49.31320181, distance: 1882.8, brightness: 31.38 },
+//   { ra: 200.9823734, dec: 54.92525908, distance: 2361.6, brightness: 39.36 },
+//   { ra: 193.5081785, dec: 55.95978478, distance: 2370.6, brightness: 39.51 },
+//   { ra: 183.8573483, dec: 57.03265316, distance: 2430.6, brightness: 40.51 },
+//   { ra: 178.4583668, dec: 53.69479733, distance: 2352.6, brightness: 39.21 },
+//   { ra: 165.4609742, dec: 56.38257749, distance: 2454.0, brightness: 40.9 },
+//   { ra: 165.931965, dec: 61.751035, distance: 1592.4, brightness: 26.54 },
+//   { ra: 183.8573483, dec: 57.03265316, distance: 2430.6, brightness: 40.51 },
+// ];
 export const Skyview: React.FC = () => {
   const [stars, setStars] = useState<StarData[]>([]);
   const [selectedStars, setSelectedStars] = useState<StarData[]>([]); // State to track selected stars

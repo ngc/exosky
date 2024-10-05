@@ -15,7 +15,9 @@ with fits.open("gaia_stars.fits") as hdul:
     dec = data["dec"].tolist()  # Declination (in degrees)
     parallax = data["parallax"].tolist()  # Parallax (for distance)
     phot_g_mean_mag = data["phot_g_mean_mag"].tolist()  # G band magnitude
-
+    bp_rp = data["bp_rp"].tolist() 
+    g_rp = data["g_rp"].tolist()
+    bp_g = data["bp_g"].tolist()
 
 # Route to serve star data as JSON
 @app.route("/stars", methods=["GET"])
@@ -34,6 +36,9 @@ def get_star_data():
             "dec": dec[i],
             "distance": distance,
             "brightness": phot_g_mean_mag[i],
+            "bp_rp" : bp_rp[i],
+            "g_rp" : g_rp[i],
+            "bp_g" : bp_g[i]
         }
         stars.append(star)
 
