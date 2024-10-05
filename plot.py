@@ -27,8 +27,9 @@ ra_shifted = np.mod(ra_shifted + 180, 360) - 180
 brightness = 10 ** (-0.4 * (phot_g_mean_mag - np.min(phot_g_mean_mag)))
 
 # Create an equirectangular projection
-fig = plt.figure(figsize=(12, 6))
+fig = plt.figure(figsize=(12, 6), frameon=False)
 ax = fig.add_subplot(111, projection="rectilinear")
+ax.set_axis_off()
 
 # Scatter plot stars on equirectangular projection
 
@@ -45,8 +46,13 @@ ax.scatter(
 ax.set_facecolor("black")
 
 # Save the image as a high-res PNG
-plt.title("Equirectangular Star Map from Exoplanet Perspective")
-plt.savefig("star_map_equirectangular.png", dpi=300)
+plt.savefig(
+    "star_map_equirectangular.jpg",
+    dpi=300,
+    bbox_inches="tight",
+    pad_inches=0,
+)
+
 
 # Show the plot
 plt.show()
