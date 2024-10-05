@@ -1,17 +1,15 @@
 // src/App.tsx
 import "@radix-ui/themes/styles.css";
 
-
-import React, { useEffect, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import React, { useEffect, useState, useRef } from "react";
+import { Canvas, ThreeEvent, useFrame } from "@react-three/fiber";
 import { OrbitControls, Line } from "@react-three/drei";
 import { MathUtils, Color } from "three";
 import * as THREE from "three";
 import { Button, Dialog, Flex, TextArea, TextField } from "@radix-ui/themes";
 import { Theme } from "@radix-ui/themes";
 import { HUD } from "./HUD";
-import { getColor } from './helpers';  // Import the getColor function
-
+import { getColor } from "./helpers"; // Import the getColor function
 
 // Define the type for a star object
 export interface StarData {
@@ -19,9 +17,9 @@ export interface StarData {
   dec: number;
   distance: number;
   brightness: number;
-  bp_rp :number;
-  g_rp : number;
-  bp_g : number;
+  bp_rp: number;
+  g_rp: number;
+  bp_g: number;
 }
 
 // Define props for the Star component
@@ -30,6 +28,7 @@ interface StarProps {
   brightness: number;
   starInfo: StarData; // Added starInfo prop to pass star data
   onSelect: (star: StarData) => void; // Callback for selecting a star
+  isSelected: boolean; // New prop to indicate if the star is selected
 }
 
 // Star Component to render individual stars
@@ -38,15 +37,33 @@ const Star: React.FC<StarProps> = ({
   brightness,
   starInfo,
   onSelect,
+  isSelected,
 }) => {
-  const [size, setSize] = useState(0.3 * Math.max(0.1, brightness / 10)); // Adjust the divisor to control size scaling
-  const clickDetectionSize = size * 25; // Size for the invisible sphere for click detection
-  const color = getColor(starInfo.bp_rp, starInfo.g_rp, starInfo.bp_g)
+  const baseSize = 0.3 * Math.max(0.1, brightness / 10); // Adjust the divisor to control size scaling
+  const [size, setSize] = useState(baseSize);
+  const clickDetectionSize = size * 10; // Size for the invisible sphere for click detection
+  const color = getColor(starInfo.bp_rp, starInfo.g_rp, starInfo.bp_g);
+  const [hovered, setHovered] = useState(false);
+  const meshRef = useRef<THREE.Mesh>(null);
 
   // Handle star selection on click
-  const handleClick = () => {
+  const handleClick = (event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation();
     onSelect(starInfo);
   };
+
+  // Handle hover and selection animation
+  useFrame(() => {
+    if (meshRef.current) {
+      if (isSelected) {
+        meshRef.current.scale.lerp(new THREE.Vector3(3, 3, 3), 0.1);
+      } else if (hovered) {
+        meshRef.current.scale.lerp(new THREE.Vector3(2, 2, 2), 0.1);
+      } else {
+        meshRef.current.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
+      }
+    }
+  });
 
   return (
     <>
@@ -54,6 +71,8 @@ const Star: React.FC<StarProps> = ({
       <mesh
         position={position}
         onClick={handleClick}
+        onPointerOver={() => setHovered(true)}
+        onPointerOut={() => setHovered(false)}
         scale={[clickDetectionSize, clickDetectionSize, clickDetectionSize]}
         visible={false} // Make the mesh invisible
       >
@@ -62,7 +81,12 @@ const Star: React.FC<StarProps> = ({
       </mesh>
 
       {/* Visible star sphere */}
-      <mesh position={position}>
+      <mesh
+        ref={meshRef}
+        position={position}
+        onPointerOver={() => setHovered(true)}
+        onPointerOut={() => setHovered(false)}
+      >
         <sphereGeometry args={[size, 8, 8]} />
         <meshBasicMaterial color={color} />
       </mesh>
@@ -81,7 +105,6 @@ const Star: React.FC<StarProps> = ({
 6,Merak,"5,7",165.4609742,56.38257749, 40.9
 7,Dubhe,"4,6",165.931965,61.751035, 26.54
  */
-
 
 // const SELECTED_STARS_BIG_DIPPER: StarData[] = [
 //   { ra: 206.8843267, dec: 49.31320181, distance: 1882.8, brightness: 31.38 },
@@ -120,7 +143,18 @@ export const Skyview: React.FC = () => {
   const handleStarSelect = (star: StarData) => {
     if (!isSelecting) {
       console.log("Selected star:", star);
-      setSelectedStars((prev) => [...prev, star]); // Add selected star to the list
+      setSelectedStars((prev) => {
+        const index = prev.findIndex(
+          (s) => s.ra === star.ra && s.dec === star.dec
+        );
+        if (index !== -1) {
+          // Star is already selected, remove it
+          return prev.filter((_, i) => i !== index);
+        } else {
+          // Star is not selected, add it
+          return [...prev, star];
+        }
+      });
       setIsSelecting(true); // Set selecting state to true
       setTimeout(() => setIsSelecting(false), 100); // Reset selecting state after a short delay
     }
@@ -173,6 +207,9 @@ export const Skyview: React.FC = () => {
                 brightness={brightness}
                 starInfo={star}
                 onSelect={handleStarSelect} // Pass the select handler
+                isSelected={selectedStars.some(
+                  (s) => s.ra === star.ra && s.dec === star.dec
+                )} // Check if the star is selected
               />
             );
           })}
