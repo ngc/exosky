@@ -26,7 +26,7 @@ def get_star_data():
         if parallax[i] > 0:  # Avoid division by zero
             distance = 1000 / parallax[i]
         else:
-            distance = None
+            continue
 
         # Create a star object with necessary fields
         star = {
