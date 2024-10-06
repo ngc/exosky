@@ -1,7 +1,13 @@
 // src/App.tsx
 import "@radix-ui/themes/styles.css";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import { Canvas, ThreeEvent, useFrame } from "@react-three/fiber";
 import { OrbitControls, Line } from "@react-three/drei";
 import { MathUtils, Color } from "three";
@@ -26,139 +32,206 @@ export interface StarData {
 interface StarProps {
   position: [number, number, number];
   brightness: number;
-  starInfo: StarData; // Added starInfo prop to pass star data
-  onSelect: (star: StarData) => void; // Callback for selecting a star
-  isSelected: boolean; // New prop to indicate if the star is selected
+  starInfo: StarData;
+  onSelect: (star: StarData) => void;
+  isSelected: boolean;
 }
 
 // Star Component to render individual stars
-const Star: React.FC<StarProps> = ({
-  position,
-  brightness,
-  starInfo,
-  onSelect,
-  isSelected,
-}) => {
-  const baseSize = 0.3 * Math.max(0.1, brightness / 10); // Adjust the divisor to control size scaling
-  const [size, setSize] = useState(baseSize);
-  const clickDetectionSize = size * 10; // Size for the invisible sphere for click detection
-  const color = getColor(starInfo.bp_rp, starInfo.g_rp, starInfo.bp_g);
-  const [hovered, setHovered] = useState(false);
-  const meshRef = useRef<THREE.Mesh>(null);
+const Star: React.FC<StarProps> = React.memo(
+  ({ position, brightness, starInfo, onSelect, isSelected }) => {
+    const baseSize = 0.3 * Math.max(0.1, brightness / 10);
+    const [size] = useState(baseSize);
+    const clickDetectionSize = size * 10;
+    const color = useMemo(
+      () => getColor(starInfo.bp_rp, starInfo.g_rp, starInfo.bp_g),
+      [starInfo]
+    );
+    const [hovered, setHovered] = useState(false);
+    const meshRef = useRef<THREE.Mesh>(null);
 
-  // Handle star selection on click
-  const handleClick = (event: ThreeEvent<MouseEvent>) => {
-    event.stopPropagation();
-    onSelect(starInfo);
-  };
+    const handleClick = useCallback(
+      (event: ThreeEvent<MouseEvent>) => {
+        event.stopPropagation();
+        onSelect(starInfo);
+      },
+      [onSelect, starInfo]
+    );
 
-  // Handle hover and selection animation
-  useFrame(() => {
-    if (meshRef.current) {
-      if (isSelected) {
-        meshRef.current.scale.lerp(new THREE.Vector3(3, 3, 3), 0.1);
-      } else if (hovered) {
-        meshRef.current.scale.lerp(new THREE.Vector3(2, 2, 2), 0.1);
-      } else {
-        meshRef.current.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
+    useFrame(() => {
+      if (meshRef.current) {
+        if (isSelected) {
+          meshRef.current.scale.lerp(new THREE.Vector3(3, 3, 3), 0.1);
+        } else if (hovered) {
+          meshRef.current.scale.lerp(new THREE.Vector3(2, 2, 2), 0.1);
+        } else {
+          meshRef.current.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
+        }
       }
-    }
-  });
+    });
 
+    return (
+      <>
+        <mesh
+          position={position}
+          onClick={handleClick}
+          onPointerOver={() => setHovered(true)}
+          onPointerOut={() => setHovered(false)}
+          scale={[clickDetectionSize, clickDetectionSize, clickDetectionSize]}
+          visible={false}
+        >
+          <sphereGeometry args={[1, 8, 8]} />
+          <meshBasicMaterial color="transparent" />
+        </mesh>
+
+        <mesh
+          ref={meshRef}
+          position={position}
+          onPointerOver={() => setHovered(true)}
+          onPointerOut={() => setHovered(false)}
+        >
+          <sphereGeometry args={[size, 8, 8]} />
+          <meshBasicMaterial color={color} />
+        </mesh>
+      </>
+    );
+  }
+);
+
+// StarField component to render all stars
+const StarField: React.FC<{
+  stars: StarData[];
+  scale: number;
+  selectedStars: StarData[];
+  onStarSelect: (star: StarData) => void;
+}> = React.memo(({ stars, scale, selectedStars, onStarSelect }) => {
   return (
     <>
-      {/* Invisible sphere for click detection */}
-      <mesh
-        position={position}
-        onClick={handleClick}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
-        scale={[clickDetectionSize, clickDetectionSize, clickDetectionSize]}
-        visible={false} // Make the mesh invisible
-      >
-        <sphereGeometry args={[1, 8, 8]} />
-        <meshBasicMaterial color="transparent" />
-      </mesh>
+      {stars.map((star, idx) => {
+        const { ra, dec, distance, brightness } = star;
+        const scaledDistance = Math.log10(distance + 1) * 10000;
+        const x =
+          (scaledDistance *
+            Math.cos(MathUtils.degToRad(dec)) *
+            Math.cos(MathUtils.degToRad(ra))) /
+          scale;
+        const y =
+          (scaledDistance *
+            Math.cos(MathUtils.degToRad(dec)) *
+            Math.sin(MathUtils.degToRad(ra))) /
+          scale;
+        const z = (scaledDistance * Math.sin(MathUtils.degToRad(dec))) / scale;
 
-      {/* Visible star sphere */}
-      <mesh
-        ref={meshRef}
-        position={position}
-        onPointerOver={() => setHovered(true)}
-        onPointerOut={() => setHovered(false)}
-      >
-        <sphereGeometry args={[size, 8, 8]} />
-        <meshBasicMaterial color={color} />
-      </mesh>
+        return (
+          <Star
+            key={idx}
+            position={[x, y, z]}
+            brightness={brightness}
+            starInfo={star}
+            onSelect={onStarSelect}
+            isSelected={selectedStars.some(
+              (s) => s.ra === star.ra && s.dec === star.dec
+            )}
+          />
+        );
+      })}
     </>
   );
-};
+});
 
-/**
- * 
- * index,proper name,conections,ra,dec, parallax
-1,Alkaid,2,206.8843267,49.31320181, 31.38 arcmin
-2,Mizar,"1,3",200.9823734,54.92525908, 39.36 arcmin
-3,Alioth,"2,4",193.5081785,55.95978478, 39.51
-4,Megrez,"3,5,7",183.8573483,57.03265316, 40.51
-5,Phecda,"4,6",178.4583668,53.69479733, 39.21
-6,Merak,"5,7",165.4609742,56.38257749, 40.9
-7,Dubhe,"4,6",165.931965,61.751035, 26.54
- */
+// ConstellationLines component to render lines between selected stars
+const ConstellationLines: React.FC<{
+  selectedStars: StarData[];
+  scale: number;
+}> = React.memo(({ selectedStars, scale }) => {
+  const points = useMemo(
+    () =>
+      selectedStars.map((star) => {
+        const { ra, dec, distance } = star;
+        const scaledDistance = Math.log10(distance + 1) * 10000;
+        const x =
+          (scaledDistance *
+            Math.cos(MathUtils.degToRad(dec)) *
+            Math.cos(MathUtils.degToRad(ra))) /
+          scale;
+        const y =
+          (scaledDistance *
+            Math.cos(MathUtils.degToRad(dec)) *
+            Math.sin(MathUtils.degToRad(ra))) /
+          scale;
+        const z = (scaledDistance * Math.sin(MathUtils.degToRad(dec))) / scale;
+        return [x, y, z];
+      }),
+    [selectedStars, scale]
+  );
 
-// const SELECTED_STARS_BIG_DIPPER: StarData[] = [
-//   { ra: 206.8843267, dec: 49.31320181, distance: 1882.8, brightness: 31.38 },
-//   { ra: 200.9823734, dec: 54.92525908, distance: 2361.6, brightness: 39.36 },
-//   { ra: 193.5081785, dec: 55.95978478, distance: 2370.6, brightness: 39.51 },
-//   { ra: 183.8573483, dec: 57.03265316, distance: 2430.6, brightness: 40.51 },
-//   { ra: 178.4583668, dec: 53.69479733, distance: 2352.6, brightness: 39.21 },
-//   { ra: 165.4609742, dec: 56.38257749, distance: 2454.0, brightness: 40.9 },
-//   { ra: 165.931965, dec: 61.751035, distance: 1592.4, brightness: 26.54 },
-//   { ra: 183.8573483, dec: 57.03265316, distance: 2430.6, brightness: 40.51 },
-// ];
+  if (selectedStars.length < 2) return null;
+
+  return (
+    <Line
+      points={points as unknown as THREE.Vector3[]}
+      color="white"
+      lineWidth={2}
+    />
+  );
+});
+
+// Ground component
+const Ground: React.FC = React.memo(() => (
+  <mesh position={[0, -10, 0]} rotation={[MathUtils.degToRad(90), 0, 0]}>
+    <planeGeometry args={[2000, 2000]} />
+    <meshBasicMaterial
+      color="gray"
+      side={THREE.DoubleSide}
+      transparent
+      opacity={1}
+    />
+  </mesh>
+));
+
 export const Skyview: React.FC = () => {
   const [stars, setStars] = useState<StarData[]>([]);
-  const [selectedStars, setSelectedStars] = useState<StarData[]>([]); // State to track selected stars
-  const [isSelecting, setIsSelecting] = useState(false); // State to track if a star is currently being selected
+  const [selectedStars, setSelectedStars] = useState<StarData[]>([]);
+  const [isSelecting, setIsSelecting] = useState(false);
+
+  const selectedExoplanetId = window.location.pathname.split("/")[2];
 
   useEffect(() => {
-    // Fetch the star data from the Flask API
-    fetch("http://127.0.0.1:5000/stars")
+    fetch(`http://127.0.0.1:5001/stars/${selectedExoplanetId}`)
       .then((response) => response.json())
       .then((data: StarData[]) => {
         console.log("Fetched star data:", data);
         setStars(data);
       })
       .catch((error) => console.error("Error fetching star data:", error));
-  }, []);
+  }, [selectedExoplanetId]);
 
-  // Determine maximum distance to adjust scaling
-  const distances = stars.map((star) => star.distance);
-  const maxDistance = Math.max(...distances);
+  const scale = useMemo(() => {
+    const distances = stars.map((star) => star.distance);
+    const maxDistance = Math.max(...distances);
+    return maxDistance / 200;
+  }, [stars]);
 
-  // Adjust scaling factor based on maximum distance
-  const scale = maxDistance / 200; // Adjust 200 to control scene size
-
-  // Function to handle star selection
-  const handleStarSelect = (star: StarData) => {
-    if (!isSelecting) {
-      console.log("Selected star:", star);
-      setSelectedStars((prev) => {
-        const index = prev.findIndex(
-          (s) => s.ra === star.ra && s.dec === star.dec
-        );
-        if (index !== -1) {
-          // Star is already selected, remove it
-          return prev.filter((_, i) => i !== index);
-        } else {
-          // Star is not selected, add it
-          return [...prev, star];
-        }
-      });
-      setIsSelecting(true); // Set selecting state to true
-      setTimeout(() => setIsSelecting(false), 100); // Reset selecting state after a short delay
-    }
-  };
+  const handleStarSelect = useCallback(
+    (star: StarData) => {
+      if (!isSelecting) {
+        console.log("Selected star:", star);
+        setSelectedStars((prev) => {
+          const index = prev.findIndex(
+            (s) => s.ra === star.ra && s.dec === star.dec
+          );
+          if (index !== -1) {
+            return prev.filter((_, i) => i !== index);
+          } else {
+            return [...prev, star];
+          }
+        });
+        setIsSelecting(true);
+        setTimeout(() => setIsSelecting(false), 100);
+      }
+    },
+    [isSelecting]
+  );
 
   return (
     <Theme>
@@ -172,88 +245,21 @@ export const Skyview: React.FC = () => {
       >
         <Canvas
           style={{ width: "100%", height: "100%" }}
-          // camera={{ position: [0, 0, 0], fov: 75 }} // Set initial camera position
           onCreated={({ gl }) => {
-            gl.setClearColor("black"); // Set canvas background to black
+            gl.setClearColor("black");
           }}
         >
           <ambientLight />
-          <OrbitControls enableZoom={false} /> {/* Disable zooming */}
-          {/* Render stars */}
-          {stars.map((star, idx) => {
-            const { ra, dec, distance, brightness } = star;
-
-            // Apply logarithmic scaling to distance
-            const scaledDistance = Math.log10(distance + 1) * 10000; // Adjust 10000 as needed
-
-            // Convert spherical coordinates (RA, Dec, Distance) to 3D Cartesian
-            const x =
-              (scaledDistance *
-                Math.cos(MathUtils.degToRad(dec)) *
-                Math.cos(MathUtils.degToRad(ra))) /
-              scale;
-            const y =
-              (scaledDistance *
-                Math.cos(MathUtils.degToRad(dec)) *
-                Math.sin(MathUtils.degToRad(ra))) /
-              scale;
-            const z =
-              (scaledDistance * Math.sin(MathUtils.degToRad(dec))) / scale;
-
-            return (
-              <Star
-                key={idx}
-                position={[x, y, z]}
-                brightness={brightness}
-                starInfo={star}
-                onSelect={handleStarSelect} // Pass the select handler
-                isSelected={selectedStars.some(
-                  (s) => s.ra === star.ra && s.dec === star.dec
-                )} // Check if the star is selected
-              />
-            );
-          })}
-          {/* Draw lines between selected stars */}
-          {selectedStars.length > 1 && (
-            <Line
-              points={selectedStars.map((star) => {
-                const { ra, dec, distance } = star;
-                const scaledDistance = Math.log10(distance + 1) * 10000; // Adjust 10000 as needed
-                const x =
-                  (scaledDistance *
-                    Math.cos(MathUtils.degToRad(dec)) *
-                    Math.cos(MathUtils.degToRad(ra))) /
-                  scale;
-                const y =
-                  (scaledDistance *
-                    Math.cos(MathUtils.degToRad(dec)) *
-                    Math.sin(MathUtils.degToRad(ra))) /
-                  scale;
-                const z =
-                  (scaledDistance * Math.sin(MathUtils.degToRad(dec))) / scale;
-                return [x, y, z];
-              })}
-              color="white" // Color of the line
-              lineWidth={2} // Width of the line
-            />
-          )}
-          {/* Ground at the horizon */}
-          <mesh
-            position={[0, -10, 0]} // Moved to center of scene
-            rotation={[MathUtils.degToRad(90), 0, 0]} // Rotated 90 degrees around X-axis
-          >
-            <planeGeometry args={[2000, 2000]} />{" "}
-            {/* Larger plane to cover entire view */}
-            <meshBasicMaterial
-              color="gray"
-              side={THREE.DoubleSide}
-              transparent
-              opacity={1}
-            />{" "}
-            {/* Opaque material */}
-          </mesh>
+          <OrbitControls enableZoom={false} />
+          <StarField
+            stars={stars}
+            scale={scale}
+            selectedStars={selectedStars}
+            onStarSelect={handleStarSelect}
+          />
+          <ConstellationLines selectedStars={selectedStars} scale={scale} />
+          <Ground />
         </Canvas>
-        {/* HUD Component */}
         <HUD selectedStars={selectedStars} />
       </div>
     </Theme>

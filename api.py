@@ -1,16 +1,60 @@
 from flask import Flask, jsonify, request
 import numpy as np
 from astropy.io import fits
+from astropy.coordinates import SkyCoord, ICRS
+import astropy.units as u
+import pandas as pd
 
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)
+CORS(
+    app,
+    resources={r"/*": {"origins": "*"}},
+    supports_credentials=True,
+    allow_headers="*",
+    expose_headers="*",
+    methods="*",
+)
+
+
+def csv_to_dict_list(file_path="exoplanets.csv"):
+    df = pd.read_csv(file_path)
+    df_filtered = df[["pl_name", "ra", "dec", "sy_dist"]]
+    dict_list = df_filtered.to_dict(orient="records")
+
+    final_list = []
+    name_set = set()
+
+    # change the key names to name, ra, dec, distance
+    for index, item in enumerate(dict_list):
+        item["id"] = index
+        item["name"] = item["pl_name"]
+        item["ra"] = item["ra"]
+        item["dec"] = item["dec"]
+        item["distance"] = item["sy_dist"]
+        del item["pl_name"]
+        del item["sy_dist"]
+
+        # if none of the keys are none, add the item to the final list
+        if (
+            not any(value is None for value in item.values())
+            and not np.isnan(item["distance"])
+            and item["name"] not in name_set
+        ):
+            print(item["distance"])
+            name_set.add(item["name"])
+            final_list.append(item)
+
+    return final_list
+
 
 import sqlite3
 from flask import g
 
 DATABASE = "database.db"
+
+EXOPLANETS = csv_to_dict_list()
 
 
 def get_db():
@@ -52,31 +96,97 @@ with fits.open("gaia_stars.fits") as hdul:
     bp_g = data["bp_g"].tolist()
 
 
-# Route to serve star data as JSON
-@app.route("/stars", methods=["GET"])
-def get_star_data():
-    stars = []
+# Route to serve star data as JSON for a specific exoplanet
+@app.route("/stars/<int:exoplanet_id>", methods=["GET"])
+def get_star_data(exoplanet_id):
+    # Load the exoplanet with the given id
+    exoplanet = next((e for e in EXOPLANETS if e["id"] == exoplanet_id), None)
+    if not exoplanet:
+        return jsonify({"error": "Exoplanet not found"}), 404
+
+    # Create SkyCoord objects for Earth and the exoplanet
+    earth_coord = SkyCoord(
+        ra=0 * u.degree, dec=0 * u.degree, distance=0 * u.pc, frame="icrs"
+    )
+    exoplanet_coord = SkyCoord(
+        ra=exoplanet["ra"] * u.degree,
+        dec=exoplanet["dec"] * u.degree,
+        distance=exoplanet["distance"] * u.pc,
+        frame="icrs",
+    )
+
+    # Initialize list to hold transformed star data
+    transformed_stars = []
+
+    # Loop through each star and transform coordinates relative to the exoplanet
     for i in range(len(ra)):
-        # Calculate distance from parallax
-        if parallax[i] > 0:  # Avoid division by zero
-            distance = 1000 / parallax[i]
-        else:
+        if parallax[i] <= 0:
+            continue  # Skip stars with invalid parallax
+
+        # Calculate distance from parallax (parsec)
+        distance_pc = 1000 / parallax[i]  # parallax in mas to distance in parsec
+
+        # Create SkyCoord object for the star
+        star_coord = SkyCoord(
+            ra=ra[i] * u.degree,
+            dec=dec[i] * u.degree,
+            distance=distance_pc * u.pc,
+            frame="icrs",
+        )
+
+        # Transform star coordinates to the exoplanet's frame
+        relative_coord = star_coord.transform_to(exoplanet_coord.frame)
+
+        # Get the transformed RA, Dec, and distance relative to the exoplanet
+        rel_ra = relative_coord.ra.degree
+        rel_dec = relative_coord.dec.degree
+        rel_distance = relative_coord.distance.value  # in parsec
+
+        # Optional: Filter stars within a certain angular distance from the exoplanet
+        # For example, within 180 degrees to cover the entire sky
+        # You can adjust this based on your requirements
+        separation = star_coord.separation(exoplanet_coord).degree
+        if separation > 180:
             continue
 
         # Create a star object with necessary fields
+        if any(
+            value is None
+            for value in [
+                rel_ra,
+                rel_dec,
+                rel_distance,
+                phot_g_mean_mag[i],
+                bp_rp[i],
+                g_rp[i],
+                bp_g[i],
+            ]
+        ) or any(
+            np.isnan(value)
+            for value in [
+                rel_ra,
+                rel_dec,
+                rel_distance,
+                phot_g_mean_mag[i],
+                bp_rp[i],
+                g_rp[i],
+                bp_g[i],
+            ]
+        ):
+            continue
         star = {
-            "ra": ra[i],
-            "dec": dec[i],
-            "distance": distance,
+            "ra": rel_ra,
+            "dec": rel_dec,
+            "distance": rel_distance,  # in parsec
             "brightness": phot_g_mean_mag[i],
             "bp_rp": bp_rp[i],
             "g_rp": g_rp[i],
             "bp_g": bp_g[i],
         }
-        stars.append(star)
+        transformed_stars.append(star)
 
-    # Serve the list of stars as JSON
-    return jsonify(stars)
+    # Serve the list of transformed stars as JSON
+    return jsonify(transformed_stars)
 
 
 @app.route("/submit-constellation", methods=["POST"])
@@ -115,6 +225,12 @@ def get_constellations():
     return jsonify(serialized_constellations)
 
 
+# get exoplanet names and ids route
+@app.route("/exoplanets", methods=["GET"])
+def get_exoplanets():
+    return jsonify(EXOPLANETS)
+
+
 # Start the Flask app
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, port=5001)

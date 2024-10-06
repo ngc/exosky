@@ -5,7 +5,7 @@ import { generateConstellationImage } from "./generate";
 import { Constellation } from "./Homepage";
 
 async function uploadConstellation(constellation: Omit<Constellation, "id">) {
-  const response = await fetch("http://127.0.0.1:5000/submit-constellation", {
+  const response = await fetch("http://127.0.0.1:5001/submit-constellation", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -20,14 +20,20 @@ export function HUD({ selectedStars }: { selectedStars: StarData[] }) {
   const [base64Image, setBase64Image] = useState("");
   const [userName, setUserName] = useState("");
 
-  const handleSubmit = useCallback(() => {
-    uploadConstellation({
-      name: constellationName,
-      description,
-      user_name: userName,
-      image_data: base64Image,
-    });
-  }, [constellationName, description, userName, base64Image]);
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      uploadConstellation({
+        name: constellationName,
+        description,
+        user_name: userName,
+        image_data: base64Image,
+      });
+      // go back to homepage
+      window.location.href = "/";
+    },
+    [constellationName, description, userName, base64Image]
+  );
 
   return (
     <>

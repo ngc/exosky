@@ -24,22 +24,8 @@ import { Link } from "react-router-dom";
 interface Exoplanet {
   name: string;
   description: string;
+  id: number;
 }
-
-const EXOPLANETS: Exoplanet[] = [
-  {
-    name: "Exoplanet 1",
-    description: "Around the star Proxima Centauri",
-  },
-  {
-    name: "Exoplanet 2",
-    description: "Around the star Proxima Centauri",
-  },
-  {
-    name: "Exoplanet 3",
-    description: "Around the star Proxima Centauri",
-  },
-];
 
 interface ConstellationCardProps {
   constellation: Constellation;
@@ -68,9 +54,20 @@ const ConstellationCard: React.FC<ConstellationCardProps> = ({
 };
 
 export const Homepage: React.FC = () => {
-  const [selectedExoplanet, setSelectedExoplanet] = React.useState<Exoplanet>(
-    EXOPLANETS[0]
-  );
+  const [exoplanets, setExoplanets] = React.useState<Exoplanet[] | null>(null);
+  const [selectedExoplanet, setSelectedExoplanet] =
+    React.useState<Exoplanet | null>(null);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:5001/exoplanets")
+      .then((response) => response.json())
+      .then((data: Exoplanet[]) => {
+        setExoplanets(data);
+        setSelectedExoplanet(data[0]);
+      });
+  }, []);
+
+  if (!exoplanets) return <div>Loading...</div>;
 
   return (
     <Theme appearance="light" accentColor="blue" grayColor="sand">
@@ -78,8 +75,7 @@ export const Homepage: React.FC = () => {
         style={{
           maxWidth: "1200px",
           margin: "0 auto",
-          borderLeft: "1px solid var(--gray-5)",
-          borderRight: "1px solid var(--gray-5)",
+
           minHeight: "100vh",
           display: "flex",
           flexDirection: "column",
@@ -97,21 +93,30 @@ export const Homepage: React.FC = () => {
             justify="center"
             style={{ minHeight: "60vh" }}
           >
+            <img
+              src="Exosky.png"
+              alt="logo"
+              style={{
+                maxWidth: "100px",
+                zIndex: 1000,
+              }}
+            />
             <Heading size="9" align="center" mb="4">
               Welcome to Exosky
             </Heading>
+
             <Text size="5" align="center" mb="6">
-              Explore the universe and create your own constellations
+              Explore the universe and create your own constellations.
             </Text>
             <Flex align="center" gap="4">
               <Button size="4" asChild>
-                <Link to="/sky">Start Exploring</Link>
+                <Link to={`/sky/${selectedExoplanet.id}`}>Start Exploring</Link>
               </Button>
               <Select.Root
                 value={selectedExoplanet.name}
                 onValueChange={(value) =>
                   setSelectedExoplanet(
-                    EXOPLANETS.find((e) => e.name === value) || EXOPLANETS[0]
+                    exoplanets.find((e) => e.name === value) || exoplanets[0]
                   )
                 }
               >
@@ -122,7 +127,7 @@ export const Homepage: React.FC = () => {
                 <Select.Content>
                   <Select.Group>
                     <Select.Label>Exoplanets</Select.Label>
-                    {EXOPLANETS.map((exoplanet, index) => (
+                    {exoplanets.map((exoplanet, index) => (
                       <Select.Item key={index} value={exoplanet.name}>
                         {exoplanet.name}
                       </Select.Item>
@@ -180,7 +185,7 @@ function Constellations() {
   >(null);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:5000/get-constellations")
+    fetch("http://127.0.0.1:5001/get-constellations")
       .then((response) => response.json())
       .then((data: Constellation[]) => setConstellations(data));
   }, []);

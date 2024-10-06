@@ -1,0 +1,39 @@
+version: '3'
+
+services:
+  react-app:
+    build:
+      context: .
+      dockerfile: dockerfiles/react.dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - flask-api
+    environment:
+      - REACT_APP_API_URL=http://flask-api:5001
+    volumes:
+      - ./my-threejs-app:/app
+      - /app/node_modules
+    # Design decision: Using volumes for hot-reloading during development
+    # This allows for a smoother development experience with instant updates
+
+  flask-api:
+    build:
+      context: .
+      dockerfile: dockerfiles/flask.dockerfile
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./api:/app
+      - ./database.db:/app/database.db
+    # Design decision: Mounting the database file as a volume
+    # This ensures data persistence between container restarts
+
+# Network configuration
+networks:
+  default:
+    name: skyview-network
+
+# Volume configuration for data persistence
+volumes:
+  database-data:
