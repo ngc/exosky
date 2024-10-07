@@ -96,9 +96,54 @@ with fits.open("gaia_stars.fits") as hdul:
     bp_g = data["bp_g"].tolist()
 
 
-# Route to serve star data as JSON for a specific exoplanet
-@app.route("/stars/<int:exoplanet_id>", methods=["GET"])
-def get_star_data(exoplanet_id):
+# Route to serve star data as JSON for a specific exoplanet or Earth
+@app.route("/stars/<string:location_id>", methods=["GET"])
+def get_star_data(location_id):
+    # Check if the request is for Earth
+    if location_id.lower() == "earth":
+        # For Earth, we don't need to transform coordinates
+        earth_stars = []
+        for i in range(len(ra)):
+            if parallax[i] <= 0:
+                continue  # Skip stars with invalid parallax
+
+            # Calculate distance from parallax (parsec)
+            distance_pc = 1000 / parallax[i]  # parallax in mas to distance in parsec
+
+            # Create a star object with necessary fields
+            if any(
+                value is None or np.isnan(value)
+                for value in [
+                    ra[i],
+                    dec[i],
+                    distance_pc,
+                    phot_g_mean_mag[i],
+                    bp_rp[i],
+                    g_rp[i],
+                    bp_g[i],
+                ]
+            ):
+                continue
+
+            star = {
+                "ra": ra[i],
+                "dec": dec[i],
+                "distance": distance_pc,  # in parsec
+                "brightness": phot_g_mean_mag[i],
+                "bp_rp": bp_rp[i],
+                "g_rp": g_rp[i],
+                "bp_g": bp_g[i],
+            }
+            earth_stars.append(star)
+
+        return jsonify(earth_stars)
+
+    # If not Earth, proceed with exoplanet star data calculation
+    try:
+        exoplanet_id = int(location_id)
+    except ValueError:
+        return jsonify({"error": "Invalid location_id"}), 400
+
     # Load the exoplanet with the given id
     exoplanet = next((e for e in EXOPLANETS if e["id"] == exoplanet_id), None)
     if not exoplanet:
@@ -134,35 +179,38 @@ def get_star_data(exoplanet_id):
             frame="icrs",
         )
 
-        # Transform star coordinates to the exoplanet's frame
-        relative_coord = star_coord.transform_to(exoplanet_coord.frame)
+        # Calculate the vector from Earth to the star
+        earth_to_star = star_coord.cartesian - earth_coord.cartesian
+
+        # Calculate the vector from Earth to the exoplanet
+        earth_to_exoplanet = exoplanet_coord.cartesian - earth_coord.cartesian
+
+        # Calculate the vector from the exoplanet to the star
+        exoplanet_to_star = earth_to_star - earth_to_exoplanet
+
+        # Convert the vector back to spherical coordinates
+        new_star_coord = SkyCoord(
+            exoplanet_to_star, representation_type="cartesian", frame="icrs"
+        )
+        new_star_coord.representation_type = "spherical"
 
         # Get the transformed RA, Dec, and distance relative to the exoplanet
-        rel_ra = relative_coord.ra.degree
-        rel_dec = relative_coord.dec.degree
-        rel_distance = relative_coord.distance.value  # in parsec
+        rel_ra = new_star_coord.ra.degree
+        rel_dec = new_star_coord.dec.degree
+        rel_distance = new_star_coord.distance.value  # in parsec
 
         # Optional: Filter stars within a certain angular distance from the exoplanet
         # For example, within 180 degrees to cover the entire sky
         # You can adjust this based on your requirements
-        separation = star_coord.separation(exoplanet_coord).degree
+        separation = new_star_coord.separation(
+            SkyCoord(0 * u.degree, 0 * u.degree)
+        ).degree
         if separation > 180:
             continue
 
         # Create a star object with necessary fields
         if any(
-            value is None
-            for value in [
-                rel_ra,
-                rel_dec,
-                rel_distance,
-                phot_g_mean_mag[i],
-                bp_rp[i],
-                g_rp[i],
-                bp_g[i],
-            ]
-        ) or any(
-            np.isnan(value)
+            value is None or np.isnan(value)
             for value in [
                 rel_ra,
                 rel_dec,

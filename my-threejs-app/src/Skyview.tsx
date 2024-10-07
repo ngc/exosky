@@ -16,6 +16,7 @@ import { Button, Dialog, Flex, TextArea, TextField } from "@radix-ui/themes";
 import { Theme } from "@radix-ui/themes";
 import { HUD } from "./HUD";
 import { getColor } from "./helpers"; // Import the getColor function
+import DynamicGround from "./DynamicGround";
 
 // Define the type for a star object
 export interface StarData {
@@ -40,13 +41,18 @@ interface StarProps {
 // Star Component to render individual stars
 const Star: React.FC<StarProps> = React.memo(
   ({ position, brightness, starInfo, onSelect, isSelected }) => {
-    const baseSize = 0.3 * Math.max(0.1, brightness / 10);
+    const baseSize = 8 * 0.3 * Math.max(0.1, brightness / 10);
     const [size] = useState(baseSize);
     const clickDetectionSize = size * 10;
-    const color = useMemo(
+    const roughColor = useMemo(
       () => getColor(starInfo.bp_rp, starInfo.g_rp, starInfo.bp_g),
       [starInfo]
     );
+
+    // We calculate the final color by making a much whiter version of the rough color
+    const color = new THREE.Color(roughColor);
+    color.multiplyScalar(2.5);
+
     const [hovered, setHovered] = useState(false);
     const meshRef = useRef<THREE.Mesh>(null);
 
@@ -98,6 +104,8 @@ const Star: React.FC<StarProps> = React.memo(
   }
 );
 
+const DISTANCE_MULTIPLIER = 30000;
+
 // StarField component to render all stars
 const StarField: React.FC<{
   stars: StarData[];
@@ -109,7 +117,8 @@ const StarField: React.FC<{
     <>
       {stars.map((star, idx) => {
         const { ra, dec, distance, brightness } = star;
-        const scaledDistance = Math.log10(distance + 1) * 10000;
+        const scaledDistance =
+          (Math.log10(distance + 1) / 8) * DISTANCE_MULTIPLIER * 10;
         const x =
           (scaledDistance *
             Math.cos(MathUtils.degToRad(dec)) *
@@ -122,18 +131,22 @@ const StarField: React.FC<{
           scale;
         const z = (scaledDistance * Math.sin(MathUtils.degToRad(dec))) / scale;
 
-        return (
-          <Star
-            key={idx}
-            position={[x, y, z]}
-            brightness={brightness}
-            starInfo={star}
-            onSelect={onStarSelect}
-            isSelected={selectedStars.some(
-              (s) => s.ra === star.ra && s.dec === star.dec
-            )}
-          />
-        );
+        // Check if the star is above the horizon (y > 0)
+        if (y > 0) {
+          return (
+            <Star
+              key={idx}
+              position={[x, y, z]}
+              brightness={brightness}
+              starInfo={star}
+              onSelect={onStarSelect}
+              isSelected={selectedStars.some(
+                (s) => s.ra === star.ra && s.dec === star.dec
+              )}
+            />
+          );
+        }
+        return null; // Don't render stars below the horizon
       })}
     </>
   );
@@ -148,7 +161,7 @@ const ConstellationLines: React.FC<{
     () =>
       selectedStars.map((star) => {
         const { ra, dec, distance } = star;
-        const scaledDistance = Math.log10(distance + 1) * 10000;
+        const scaledDistance = Math.log10(distance + 1) * DISTANCE_MULTIPLIER;
         const x =
           (scaledDistance *
             Math.cos(MathUtils.degToRad(dec)) *
@@ -177,33 +190,31 @@ const ConstellationLines: React.FC<{
 });
 
 // Ground component
-const Ground: React.FC = React.memo(() => (
-  <mesh position={[0, -10, 0]} rotation={[MathUtils.degToRad(90), 0, 0]}>
-    <planeGeometry args={[2000, 2000]} />
-    <meshBasicMaterial
-      color="gray"
-      side={THREE.DoubleSide}
-      transparent
-      opacity={1}
-    />
-  </mesh>
+const Ground: React.FC<{ seed: number }> = React.memo(({ seed }) => (
+  <DynamicGround seed={seed} />
 ));
 
 export const Skyview: React.FC = () => {
   const [stars, setStars] = useState<StarData[]>([]);
   const [selectedStars, setSelectedStars] = useState<StarData[]>([]);
   const [isSelecting, setIsSelecting] = useState(false);
+  const [isLoadingStars, setIsLoadingStars] = useState(true);
 
   const selectedExoplanetId = window.location.pathname.split("/")[2];
 
   useEffect(() => {
+    setIsLoadingStars(true);
     fetch(`http://127.0.0.1:5001/stars/${selectedExoplanetId}`)
       .then((response) => response.json())
       .then((data: StarData[]) => {
         console.log("Fetched star data:", data);
         setStars(data);
+        setIsLoadingStars(false);
       })
-      .catch((error) => console.error("Error fetching star data:", error));
+      .catch((error) => {
+        console.error("Error fetching star data:", error);
+        setIsLoadingStars(false);
+      });
   }, [selectedExoplanetId]);
 
   const scale = useMemo(() => {
@@ -245,8 +256,9 @@ export const Skyview: React.FC = () => {
       >
         <Canvas
           style={{ width: "100%", height: "100%" }}
-          onCreated={({ gl }) => {
+          onCreated={({ gl, camera }) => {
             gl.setClearColor("black");
+            camera.zoom = 100;
           }}
         >
           <ambientLight />
@@ -258,9 +270,9 @@ export const Skyview: React.FC = () => {
             onStarSelect={handleStarSelect}
           />
           <ConstellationLines selectedStars={selectedStars} scale={scale} />
-          <Ground />
+          <Ground seed={parseInt(selectedExoplanetId)} />
         </Canvas>
-        <HUD selectedStars={selectedStars} />
+        <HUD selectedStars={selectedStars} isLoadingStars={isLoadingStars} />
       </div>
     </Theme>
   );
