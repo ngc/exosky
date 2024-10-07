@@ -20,7 +20,7 @@ CORS(
 
 def csv_to_dict_list(file_path="exoplanets.csv"):
     df = pd.read_csv(file_path)
-    df_filtered = df[["pl_name", "ra", "dec", "sy_dist"]]
+    df_filtered = df[["pl_name", "ra", "dec", "sy_dist", "pl_bmasse"]]
     dict_list = df_filtered.to_dict(orient="records")
 
     final_list = []
@@ -33,14 +33,18 @@ def csv_to_dict_list(file_path="exoplanets.csv"):
         item["ra"] = item["ra"]
         item["dec"] = item["dec"]
         item["distance"] = item["sy_dist"]
+        item["mass"] = item["pl_bmasse"]
         del item["pl_name"]
         del item["sy_dist"]
+        del item["pl_bmasse"]
 
         # if none of the keys are none, add the item to the final list
         if (
             not any(value is None for value in item.values())
             and not np.isnan(item["distance"])
             and item["name"] not in name_set
+            and item["mass"] is not None
+            and not np.isnan(item["mass"])
         ):
             print(item["distance"])
             name_set.add(item["name"])
@@ -277,6 +281,12 @@ def get_constellations():
 @app.route("/exoplanets", methods=["GET"])
 def get_exoplanets():
     return jsonify(EXOPLANETS)
+
+
+@app.route("/exoplanet/<int:id>", methods=["GET"])
+def get_exoplanet(id):
+    exoplanet = next((e for e in EXOPLANETS if e["id"] == id), None)
+    return jsonify(exoplanet)
 
 
 # Start the Flask app

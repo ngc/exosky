@@ -27,20 +27,6 @@ function App() {
             <Route path="*" element={<Homepage />} />
           </Routes>
         </Router>
-        {showLogo && (
-          <img
-            src="Exosky.png"
-            alt="logo"
-            style={{
-              position: "fixed",
-              bottom: "20px",
-              left: "20px",
-              maxWidth: "100px",
-              zIndex: 1000,
-              opacity: 0.8,
-            }}
-          />
-        )}
       </div>
     </Theme>
   );

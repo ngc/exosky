@@ -3,6 +3,7 @@ import { Button, Dialog, Flex, TextArea, TextField } from "@radix-ui/themes";
 import { StarData } from "./Skyview";
 import { generateConstellationImage } from "./generate";
 import { Constellation } from "./Homepage";
+import { FaXTwitter } from "react-icons/fa6";
 
 async function uploadConstellation(constellation: Omit<Constellation, "id">) {
   const response = await fetch("http://127.0.0.1:5001/submit-constellation", {
@@ -163,9 +164,11 @@ const LoadingScreen: React.FC = () => {
 export function HUD({
   selectedStars,
   isLoadingStars,
+  exoplanetData,
 }: {
   selectedStars: StarData[];
   isLoadingStars: boolean;
+  exoplanetData: any;
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [constellationName, setConstellationName] = useState("");
@@ -269,6 +272,14 @@ export function HUD({
               here
             </a>
           </p>
+          {exoplanetData && (
+            <div>
+              You are currently on {exoplanetData["name"]}, which is{" "}
+              {exoplanetData["distance"] * 3.26156378} light-years away from
+              Earth. Its mass is equivalent to {exoplanetData["mass"]} times
+              that of Earth!
+            </div>
+          )}
         </div>
         {/* Additional HUD elements can be added here */}
       </div>
@@ -410,20 +421,42 @@ export function HUD({
                         </p>
                       )}
                     </label>
-                    <Button
-                      type="submit"
-                      style={{
-                        background: "#007bff",
-                        color: "#ffffff",
-                        padding: "12px",
-                        borderRadius: "8px",
-                        border: "none",
-                        cursor: "pointer",
-                        transition: "background 0.3s",
-                      }}
-                    >
-                      Inscribe in the Stars
-                    </Button>
+                    <Flex direction="row" gap="2">
+                      <Button
+                        type="submit"
+                        style={{
+                          background: "#007bff",
+                          color: "#ffffff",
+                          padding: "12px",
+                          borderRadius: "8px",
+                          border: "none",
+                          cursor: "pointer",
+                          transition: "background 0.3s",
+                          flex: 1,
+                        }}
+                      >
+                        Inscribe in the Stars
+                      </Button>
+                      <Button
+                        disabled
+                        style={{
+                          background: "#1DA1F2",
+                          color: "#ffffff",
+                          padding: "12px",
+                          borderRadius: "8px",
+                          border: "none",
+                          cursor: "not-allowed",
+                          opacity: 0.5,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <div>Share on </div>
+                        <FaXTwitter />
+                      </Button>
+                    </Flex>
                   </Flex>
                 </form>
               </div>
