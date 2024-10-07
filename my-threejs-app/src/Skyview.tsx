@@ -9,7 +9,7 @@ import React, {
   useCallback,
 } from "react";
 import { Canvas, ThreeEvent, useFrame } from "@react-three/fiber";
-import { OrbitControls, Line } from "@react-three/drei";
+import { OrbitControls, Line, Billboard, Text3D } from "@react-three/drei";
 import { MathUtils, Color } from "three";
 import * as THREE from "three";
 import { Button, Dialog, Flex, TextArea, TextField } from "@radix-ui/themes";
@@ -27,6 +27,7 @@ export interface StarData {
   bp_rp: number;
   g_rp: number;
   bp_g: number;
+  source_id: string;
 }
 
 // Define props for the Star component
@@ -37,11 +38,47 @@ interface StarProps {
   onSelect: (star: StarData) => void;
   onDoubleClick: (star: StarData) => void;
   isSelected: boolean;
+  onHover: (star: StarData | null) => void;
 }
+
+const EarthComponent = ({
+  earth,
+}: {
+  earth: { ra: number; distance: number; dec: number } | null;
+}) => {
+  if (!earth) return null;
+
+  const { ra, distance, dec } = earth;
+  const scaledDistance = distance * 1000;
+
+  // Convert spherical coordinates to Cartesian
+  const x = scaledDistance * Math.cos(dec) * Math.cos(ra);
+  const y = scaledDistance * Math.cos(dec) * Math.sin(ra);
+  const z = scaledDistance * Math.sin(dec);
+
+  const font = "/gt.json";
+
+  return (
+    <group position={[x, y, z]}>
+      <mesh>
+        <sphereGeometry args={[0.1, 32, 32]} />
+        <meshBasicMaterial color="hotpink" />
+      </mesh>
+    </group>
+  );
+};
 
 // Star Component to render individual stars
 const Star: React.FC<StarProps> = React.memo(
-  ({ position, brightness, starInfo, onSelect, onDoubleClick, isSelected }) => {
+  ({
+    position,
+    brightness,
+    starInfo,
+    onSelect,
+    onDoubleClick,
+    isSelected,
+    onHover,
+  }) => {
     const baseSize = 8 * 0.3 * Math.max(0.1, brightness / 10);
     const [size] = useState(baseSize);
     const clickDetectionSize = size * 10;
@@ -91,8 +128,14 @@ const Star: React.FC<StarProps> = React.memo(
           position={position}
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
-          onPointerOver={() => setHovered(true)}
-          onPointerOut={() => setHovered(false)}
+          onPointerOver={() => {
+            setHovered(true);
+            onHover(starInfo);
+          }}
+          onPointerOut={() => {
+            setHovered(false);
+            onHover(null);
+          }}
           scale={[clickDetectionSize, clickDetectionSize, clickDetectionSize]}
           visible={false}
         >
@@ -103,8 +146,14 @@ const Star: React.FC<StarProps> = React.memo(
         <mesh
           ref={meshRef}
           position={position}
-          onPointerOver={() => setHovered(true)}
-          onPointerOut={() => setHovered(false)}
+          onPointerOver={() => {
+            setHovered(true);
+            onHover(starInfo);
+          }}
+          onPointerOut={() => {
+            setHovered(false);
+            onHover(null);
+          }}
         >
           <sphereGeometry args={[size, 8, 8]} />
           <meshBasicMaterial color={color} />
@@ -123,8 +172,16 @@ const StarField: React.FC<{
   selectedStars: StarData[];
   onStarSelect: (star: StarData) => void;
   onStarDoubleClick: (star: StarData) => void;
+  onStarHover: (star: StarData | null) => void;
 }> = React.memo(
-  ({ stars, scale, selectedStars, onStarSelect, onStarDoubleClick }) => {
+  ({
+    stars,
+    scale,
+    selectedStars,
+    onStarSelect,
+    onStarDoubleClick,
+    onStarHover,
+  }) => {
     return (
       <>
         {stars.map((star, idx) => {
@@ -154,6 +211,7 @@ const StarField: React.FC<{
                 starInfo={star}
                 onSelect={onStarSelect}
                 onDoubleClick={onStarDoubleClick}
+                onHover={onStarHover}
                 isSelected={selectedStars.some(
                   (s) => s.ra === star.ra && s.dec === star.dec
                 )}
@@ -169,7 +227,10 @@ const StarField: React.FC<{
 
 // ConstellationLines component to render lines between selected stars
 const ConstellationLines: React.FC<{
-  selectedStars: Omit<StarData, "brightness" | "bp_rp" | "g_rp" | "bp_g">[];
+  selectedStars: Omit<
+    StarData,
+    "brightness" | "bp_rp" | "g_rp" | "bp_g" | "source_id"
+  >[];
   scale: number;
 }> = React.memo(({ selectedStars, scale }) => {
   const points = useMemo(
@@ -213,7 +274,7 @@ const EarthConstellationLines: React.FC<{ scale: number }> = React.memo(
 
     const EARTH_CONSTELLATIONS: Omit<
       StarData,
-      "brightness" | "bp_rp" | "g_rp" | "bp_g"
+      "brightness" | "bp_rp" | "g_rp" | "bp_g" | "source_id"
     >[][] = [
       [
         { ra: 37.954561, dec: 89.264109, distance: 7.54 },
@@ -253,6 +314,13 @@ export const Skyview: React.FC = () => {
   const [selectedStars, setSelectedStars] = useState<StarData[]>([]);
   const [isSelecting, setIsSelecting] = useState(false);
   const [isLoadingStars, setIsLoadingStars] = useState(true);
+  const [hoveredStar, setHoveredStar] = useState<StarData | null>(null);
+
+  const [earth, setEarth] = useState<{
+    ra: number;
+    distance: number;
+    dec: number;
+  } | null>(null);
 
   const selectedExoplanetId = window.location.pathname.split("/")[2];
 
@@ -264,7 +332,8 @@ export const Skyview: React.FC = () => {
       .then((response) => response.json())
       .then((data: StarData[]) => {
         console.log("Fetched star data:", data);
-        setStars(data);
+        setStars(data["stars"]);
+        setEarth(data["earth"]);
         setIsLoadingStars(false);
       })
       .catch((error) => {
@@ -309,6 +378,10 @@ export const Skyview: React.FC = () => {
     );
   }, []);
 
+  const handleStarHover = useCallback((star: StarData | null) => {
+    setHoveredStar(star);
+  }, []);
+
   return (
     <Theme>
       <div
@@ -334,7 +407,9 @@ export const Skyview: React.FC = () => {
             selectedStars={selectedStars}
             onStarSelect={handleStarSelect}
             onStarDoubleClick={handleStarDoubleClick}
+            onStarHover={handleStarHover}
           />
+          <EarthComponent earth={earth} />
           <ConstellationLines selectedStars={selectedStars} scale={scale} />
           <Ground seed={parseInt(selectedExoplanetId)} />
         </Canvas>
@@ -342,6 +417,7 @@ export const Skyview: React.FC = () => {
           selectedStars={selectedStars}
           isLoadingStars={isLoadingStars}
           exoplanetData={exoplanetData}
+          hoveredStar={hoveredStar}
         />
       </div>
     </Theme>

@@ -98,6 +98,7 @@ with fits.open("gaia_stars.fits") as hdul:
     bp_rp = data["bp_rp"].tolist()
     g_rp = data["g_rp"].tolist()
     bp_g = data["bp_g"].tolist()
+    source_id = data["source_id"].tolist()
 
 
 # Route to serve star data as JSON for a specific exoplanet or Earth
@@ -125,6 +126,7 @@ def get_star_data(location_id):
                     bp_rp[i],
                     g_rp[i],
                     bp_g[i],
+                    source_id[i],
                 ]
             ):
                 continue
@@ -137,10 +139,14 @@ def get_star_data(location_id):
                 "bp_rp": bp_rp[i],
                 "g_rp": g_rp[i],
                 "bp_g": bp_g[i],
+                "source_id": source_id[i],
             }
             earth_stars.append(star)
 
-        return jsonify(earth_stars)
+        data = {}
+        data["stars"] = earth_stars
+        data["earth"] = None
+        return jsonify(data)
 
     # If not Earth, proceed with exoplanet star data calculation
     try:
@@ -223,6 +229,7 @@ def get_star_data(location_id):
                 bp_rp[i],
                 g_rp[i],
                 bp_g[i],
+                source_id[i],
             ]
         ):
             continue
@@ -234,11 +241,34 @@ def get_star_data(location_id):
             "bp_rp": bp_rp[i],
             "g_rp": g_rp[i],
             "bp_g": bp_g[i],
+            "source_id": source_id[i],
         }
         transformed_stars.append(star)
 
     # Serve the list of transformed stars as JSON
-    return jsonify(transformed_stars)
+
+    data = {}
+    data["stars"] = transformed_stars
+
+    # Now we want to figure out where on this map, relative to the exoplanet that Earth would be positioned at
+    earth_coord = SkyCoord(0 * u.degree, 0 * u.degree, distance=1 * u.pc, frame="icrs")
+    earth_to_exoplanet = earth_coord.cartesian - exoplanet_coord.cartesian
+    earth_relative_coord = SkyCoord(
+        earth_to_exoplanet, representation_type="cartesian", frame="icrs"
+    )
+    earth_relative_coord.representation_type = "spherical"
+
+    earth_rel_ra = earth_relative_coord.ra.degree
+    earth_rel_dec = earth_relative_coord.dec.degree
+    earth_rel_distance = earth_relative_coord.distance.value  # in parsec
+
+    data["earth"] = {
+        "ra": earth_rel_ra,
+        "dec": earth_rel_dec,
+        "distance": earth_rel_distance,
+    }
+
+    return jsonify(data)
 
 
 @app.route("/submit-constellation", methods=["POST"])

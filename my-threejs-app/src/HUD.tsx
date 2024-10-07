@@ -165,10 +165,12 @@ export function HUD({
   selectedStars,
   isLoadingStars,
   exoplanetData,
+  hoveredStar,
 }: {
   selectedStars: StarData[];
   isLoadingStars: boolean;
   exoplanetData: any;
+  hoveredStar: StarData | null;
 }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [constellationName, setConstellationName] = useState("");
@@ -280,9 +282,36 @@ export function HUD({
               that of Earth!
             </div>
           )}
+
+          <div>
+            <h3>Wonder where Earth is? </h3>
+            <p>Look for the bright pink star!</p>
+          </div>
         </div>
         {/* Additional HUD elements can be added here */}
       </div>
+      {hoveredStar && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(50% + 50px)",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            color: "white",
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            padding: "10px",
+            borderRadius: "5px",
+            fontSize: "12px",
+            maxWidth: "300px",
+            wordWrap: "break-word",
+          }}
+        >
+          <h2>
+            Distance: {(hoveredStar.distance * 3.26156378).toFixed(3)}{" "}
+            light-years
+          </h2>
+        </div>
+      )}
       <div
         style={{
           position: "absolute",
